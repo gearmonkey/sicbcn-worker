@@ -30,21 +30,25 @@ def main(argv=sys.argv):
         for idx,(team_id, data) in enumerate(conn.get('/teams', None).items()):
             if data['findNextTrack']:
                 print 'grabbing a new track for team', data['teamName']
-                try:
-                    if idx%2 == 0:
-                        newTrack = teams_a_pool.pop()
-                    else:
-                        newTrack = teams_b_pool.pop()
-                except IndexError:
-                    if idx%2 == 0:
-                        teams_a_pool = collect_tracks()
-                        random.shuffle(teams_a_pool)
-                        newTrack = teams_a_pool.pop()
-                    else:
-                        teams_b_pool = collect_tracks()
-                        random.shuffle(teams_b_pool)
-                        newTrack = teams_b_pool.pop()
-                full_track_details = requests.get('http://api.deezer.com/track/%s'%newTrack['id']).json()
+                bpm = None
+                while not bpm > 0:
+                    try:
+                        if idx%2 == 0:
+                            newTrack = teams_a_pool.pop()
+                        else:
+                            newTrack = teams_b_pool.pop()
+                    except IndexError:
+                        if idx%2 == 0:
+                            teams_a_pool = collect_tracks()
+                            random.shuffle(teams_a_pool)
+                            newTrack = teams_a_pool.pop()
+                        else:
+                            teams_b_pool = collect_tracks()
+                            random.shuffle(teams_b_pool)
+                            newTrack = teams_b_pool.pop()
+                    full_track_details = requests.get('http://api.deezer.com/track/%s'%newTrack['id']).json()
+                    bpm = full_track_details.get('bpm', None)
+                    print 'candidate track has bpm of', bpm
                 print "new track will be", full_track_details['title'], 'by', full_track_details['artist']['name']
                 res = conn.put('/teams/%s'%team_id, 'nextTrack', full_track_details)
                 res = conn.put('/teams/%s'%team_id, 'findNextTrack', False)
