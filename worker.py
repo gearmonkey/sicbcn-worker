@@ -1,6 +1,7 @@
 import sys, os, os.path, random, time
 
 import simplejson
+import requests
 from firebase import firebase
 
 conn = firebase.FirebaseApplication('https://sonar-11442.firebaseio.com', None)
@@ -8,6 +9,8 @@ conn = firebase.FirebaseApplication('https://sonar-11442.firebaseio.com', None)
 def collect_tracks(top='./sonar_data/albums/'):
     tracks = []
     for filepath in list(os.walk(top))[0][2]:
+        if not filepath[-4:] == 'json':
+            continue
         print filepath
         with open(os.path.join(top, filepath)) as rh:
             data = simplejson.loads(rh.read())
@@ -18,23 +21,32 @@ def collect_tracks(top='./sonar_data/albums/'):
 def main(argv=sys.argv):
     """the business end of the situation"""
     print "loading tracks..."
-    tracks = collect_tracks()
-    random.shuffle(tracks)
-    teams_a_pool = tracks[:len(tracks)/2]
-    teams_b_pool = tracks[len(tracks)/2:]
+    teams_a_pool = collect_tracks(top='./sonar_data/albums/_day/')
+    teams_b_pool = collect_tracks(top='./sonar_data/albums/_night/')
+    random.shuffle(teams_a_pool)
+    random.shuffle(teams_b_pool)
     print "listening..."
     while True:
-        for team_id, data in conn.get('/teams', None).items():
+        for idx,(team_id, data) in enumerate(conn.get('/teams', None).items()):
             if data['findNextTrack']:
                 print 'grabbing a new track for team', data['teamName']
                 try:
-                    newTrack = tracks.pop()
+                    if idx%2 == 0:
+                        newTrack = teams_a_pool.pop()
+                    else:
+                        newTrack = teams_b_pool.pop()
                 except IndexError:
-                    tracks = collect_tracks()
-                    random.shuffle(tracks)
-                    newTrack = tracks.pop()
-                print "new track will be", newTrack['title'], 'by', newTrack['artist']['name']
-                res = conn.put('/teams/%s'%team_id, 'nextTrack', newTrack)
+                    if idx%2 == 0:
+                        teams_a_pool = collect_tracks()
+                        random.shuffle(teams_a_pool)
+                        newTrack = teams_a_pool.pop()
+                    else:
+                        teams_b_pool = collect_tracks()
+                        random.shuffle(teams_b_pool)
+                        newTrack = teams_b_pool.pop()
+                full_track_details = requests.get('http://api.deezer.com/track/%s'%newTrack['id']).json()
+                print "new track will be", full_track_details['title'], 'by', full_track_details['artist']['name']
+                res = conn.put('/teams/%s'%team_id, 'nextTrack', full_track_details)
                 res = conn.put('/teams/%s'%team_id, 'findNextTrack', False)
         time.sleep(.5)
 
