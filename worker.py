@@ -18,6 +18,11 @@ def collect_tracks(top='./sonar_data/albums/'):
             tracks.append(track)
     return tracks
 
+def load_supplemental_data(filepath='sonar_data/sonar_metadata_all.json'):
+    with open(filepath) as rh:
+        supplement = simplejson.loads(rh.read())
+    return supplement
+
 def main(argv=sys.argv):
     """the business end of the situation"""
     print "loading tracks..."
@@ -25,6 +30,8 @@ def main(argv=sys.argv):
     teams_b_pool = collect_tracks(top='./sonar_data/albums/_night/')
     random.shuffle(teams_a_pool)
     random.shuffle(teams_b_pool)
+    print "loading supplemental track data.."
+    supplement = load_supplemental_data()
     print "listening..."
     while True:
         for idx,(team_id, data) in enumerate(conn.get('/teams', None).items()):
@@ -50,6 +57,14 @@ def main(argv=sys.argv):
                     bpm = full_track_details.get('bpm', None)
                     print 'candidate track has bpm of', bpm
                 print "new track will be", full_track_details['title'], 'by', full_track_details['artist']['name']
+                try:
+                    full_track_details['crop'] = supplement[str(newTrack['id'])]['crop']
+                except KeyError:
+                    if full_track_details.get('duration', 0) < 30:
+                        full_track_details['crop'] = [0.0, 30.0]
+                    else:
+                        midpoint = full_track_details['duration']/2.0
+                        full_track_details['crop'] = [midpoint-15, midpoint+15]
                 res = conn.put('/teams/%s'%team_id, 'nextTrack', full_track_details)
                 res = conn.put('/teams/%s'%team_id, 'findNextTrack', False)
         time.sleep(.5)
