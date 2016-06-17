@@ -1,8 +1,11 @@
 import sys, os, os.path, random, time
+import logging
 
 import simplejson
 import requests
 from firebase import firebase
+
+logging.basicConfig(format='%(asctime)s:%(levelname)s:%(message)s', level=logging.INFO)
 
 conn = firebase.FirebaseApplication('https://sonar-11442.firebaseio.com', None)
 
@@ -11,7 +14,7 @@ def collect_tracks(top='./sonar_data/albums/'):
     for filepath in list(os.walk(top))[0][2]:
         if not filepath[-4:] == 'json':
             continue
-        print filepath
+        logging.debug( filepath )
         with open(os.path.join(top, filepath)) as rh:
             data = simplejson.loads(rh.read())
         for track in data['tracks']['data']:
@@ -25,18 +28,18 @@ def load_supplemental_data(filepath='sonar_data/sonar_metadata_all.json'):
 
 def main(argv=sys.argv):
     """the business end of the situation"""
-    print "loading tracks..."
+    logging.info( "loading tracks..." )
     teams_a_pool = collect_tracks(top='./sonar_data/albums/_day/')
     teams_b_pool = collect_tracks(top='./sonar_data/albums/_night/')
     random.shuffle(teams_a_pool)
     random.shuffle(teams_b_pool)
-    print "loading supplemental track data.."
+    logging.info( "loading supplemental track data.." )
     supplement = load_supplemental_data()
-    print "listening..."
+    logging.info( "listening..." )
     while True:
         for idx,(team_id, data) in enumerate(conn.get('/teams', None).items()):
             if data.get('findNextTrack', None):
-                print 'grabbing a new track for team', data['teamName']
+                logging.info( 'grabbing a new track for team %s'%data['teamName'] )
                 bpm = None
                 while not bpm > 0:
                     try:
@@ -55,8 +58,8 @@ def main(argv=sys.argv):
                             newTrack = teams_b_pool.pop()
                     full_track_details = requests.get('http://api.deezer.com/track/%s'%newTrack['id']).json()
                     bpm = full_track_details.get('bpm', None)
-                    print 'candidate track has bpm of', bpm
-                print "new track will be", full_track_details['title'], 'by', full_track_details['artist']['name']
+                    logging.debug( 'candidate track has bpm of %s'% bpm )
+                logging.info( "new track will be %s by %s"%(full_track_details['title'],  full_track_details['artist']['name']) )
                 try:
                     full_track_details['crop'] = supplement[str(newTrack['id'])]['crop']
                 except KeyError:
@@ -65,6 +68,7 @@ def main(argv=sys.argv):
                     else:
                         midpoint = full_track_details['duration']/2.0
                         full_track_details['crop'] = [midpoint-15, midpoint+15]
+                logging.debug(  'candidate track has crop points of %s'%full_track_details['crop'] )
                 res = conn.put('/teams/%s'%team_id, 'nextTrack', full_track_details)
                 res = conn.put('/teams/%s'%team_id, 'findNextTrack', False)
         time.sleep(.5)
