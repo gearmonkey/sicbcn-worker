@@ -28,7 +28,7 @@ def main(argv=sys.argv):
     print "listening..."
     while True:
         for idx,(team_id, data) in enumerate(conn.get('/teams', None).items()):
-            if data['findNextTrack']:
+            if data.get('findNextTrack', None):
                 print 'grabbing a new track for team', data['teamName']
                 bpm = None
                 while not bpm > 0:
